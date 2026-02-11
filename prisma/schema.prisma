@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+  users User[]
+  cases Case[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  role           String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  casesCreated   Case[]   @relation("CaseCreatedBy")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Case {
+  id                      String    @id @default(cuid())
+  caseNumber              String    @unique
+  status                  String    // Draft | Quoted | Sent | Approved | Booked | Completed
+  deceasedFullName        String?
+  deceasedDob             DateTime?
+  deceasedDod             DateTime?
+  deceasedPreferredName   String?
+  deceasedGender          String?
+  nextOfKinName           String?
+  nextOfKinRelationship   String?
+  nextOfKinPhone          String?
+  nextOfKinEmail          String?
+  serviceType             String?   // burial | cremation
+  serviceStyle            String?   // religious | non-religious | celebration
+  venuePreference         String?
+  expectedAttendeesMin    Int?
+  expectedAttendeesMax    Int?
+  budgetMin               Int?     // cents
+  budgetMax               Int?     // cents
+  budgetPreference        String?  // minimal | balanced | premium
+  suburb                  String?
+  state                   String?   // AU state
+  preferredServiceDate    DateTime?
+  dateFlexibility         String?  // fixed | +/-2 days | flexible
+  culturalFaithRequirements String? // JSON array
+  notes                   String?
+  internalNotes           String?
+  addOns                  String?  // JSON: invitations, livestream, flowers, etc.
+  urgency                 String?  // within 24-48h etc
+  organizationId          String
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById             String?
+  createdBy               User?    @relation("CaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  recommendedPackageId    String?  // chosen package id after client approval
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  packages        Package[]
+  approvalTokens  ApprovalToken[]
+  changeRequests  ChangeRequest[]
+  emailLogs       EmailLog[]
+  invitationInstances InvitationInstance[]
+  invoices        Invoice[]
+  tasks           Task[]
+  agentRuns       AgentRun[]
+  chatMessages    CaseChatMessage[]
+  intakeState     CaseIntakeState?
+}
+
+model CaseChatMessage {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  role      String   // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model CaseIntakeState {
+  id              String   @id @default(cuid())
+  caseId          String   @unique
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  mode            String   // COLLECTING | GENERATED
+  collectedJson   String   // JSON object of intake fields
+  lastQuestionKey String?
+  updatedAt       DateTime @updatedAt
+}
+
+model Package {
+  id            String   @id @default(cuid())
+  caseId        String
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  tier          String   // Essential | Standard | Premium
+  name          String
+  description   String?
+  totalCents    Int
+  inclusions    String?  // JSON array
+  assumptions   String?  // JSON object
+  isRecommended Boolean @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quoteLineItems QuoteLineItem[]
+}
+
+model QuoteLineItem {
+  id          String   @id @default(cuid())
+  packageId   String
+  package     Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  description String
+  amountCents Int
+  category    String   // service | merchandise | cashAdvance
+  createdAt   DateTime @default(now())
+}
+
+model ApprovalToken {
+  id        String    @id @default(cuid())
+  caseId    String
+  case      Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  email     String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  changeRequests ChangeRequest[]
+}
+
+model ChangeRequest {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  tokenId   String?
+  token     ApprovalToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  to        String
+  subject   String
+  body      String
+  sentAt    DateTime @default(now())
+  provider  String   // resend | mock
+  externalId String?
+}
+
+model InvitationTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  thumbnailUrl  String?
+  designConfig  String?  // JSON
+  organizationId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  instances InvitationInstance[]
+}
+
+model InvitationInstance {
+  id              String   @id @default(cuid())
+  caseId          String
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  templateId      String
+  template        InvitationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  designSnapshot  String?  // JSON
+  serviceName     String?
+  serviceDate     DateTime?
+  serviceTime     String?
+  locationName    String?
+  locationAddress String?
+  includeQrCode   Boolean  @default(false)
+  includeMapLink  Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  guests InvitationGuest[]
+}
+
+model InvitationGuest {
+  id                   String   @id @default(cuid())
+  invitationInstanceId String
+  invitationInstance   InvitationInstance @relation(fields: [invitationInstanceId], references: [id], onDelete: Cascade)
+  name                 String
+  email                String?
+  sentAt               DateTime?
+  createdAt            DateTime @default(now())
+}
+
+model Invoice {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  invoiceNumber String?
+  status     String   // Draft | Sent | Paid | Overdue
+  totalCents Int
+  lineItems  String?  // JSON
+  sentAt     DateTime?
+  paidAt     DateTime?
+  pdfUrl     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  title       String
+  dueDate     DateTime?
+  completedAt DateTime?
+  category    String    // venue | logistics | compliance | other
+  source      String    // agent | manual
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AgentRun {
+  id             String   @id @default(cuid())
+  caseId         String
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  agentName      String
+  inputSnapshot  String   // JSON
+  outputSnapshot String   // JSON
+  createdAt      DateTime @default(now())
+}

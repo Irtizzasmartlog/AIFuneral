@@ -34,7 +34,8 @@ B2B internal tool for funeral directors (Australia). Automates admin workflow: i
    - `NEXTAUTH_SECRET` – Any long random string (e.g. 32+ chars)
    - `NEXTAUTH_URL` – e.g. `http://localhost:3000`
    - `RESEND_API_KEY` – Optional. If missing, emails are logged to console and stored in `EmailLog` (mock mode).
-   - `OPENAI_API_KEY` – Optional. If missing, AI agents use deterministic mock mode.
+   - `GEMINI_API_KEY` – Optional. If set, intake chat uses Google Gemini. If missing, uses deterministic mock mode.
+   - `GEMINI_MODEL` – Optional. Default `gemini-1.5-flash`.
 
 3. **Database**
 
@@ -75,7 +76,7 @@ B2B internal tool for funeral directors (Australia). Automates admin workflow: i
 ## Mock mode
 
 - **Email:** If `RESEND_API_KEY` is not set, emails are not sent; they are logged to the console and stored in `EmailLog` with `provider: "mock"`.
-- **AI:** If `OPENAI_API_KEY` is not set, the orchestrator uses rule-based mock agents (no LLM calls).
+- **Intake chat:** If `GEMINI_API_KEY` is not set, the intake chat uses rule-based mock engine (no LLM calls). The app works fully offline for intake.
 
 ## Compliance
 

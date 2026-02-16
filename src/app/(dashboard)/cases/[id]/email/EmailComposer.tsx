@@ -7,9 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { createApprovalTokenAndSend } from "@/app/actions/email";
 import { toast } from "sonner";
-import { Send, Sparkles } from "lucide-react";
+import { Send, FileText } from "lucide-react";
+import { REQUIRED_FORMS_LIST } from "@/lib/email/required-forms";
 
 type PackageItem = {
   id: string;
@@ -48,6 +57,8 @@ Sincerely,
 {{Funeral_Director_Name}}`
   );
   const [sending, setSending] = useState(false);
+  const [requiredFormsOpen, setRequiredFormsOpen] = useState(false);
+  const [sendingRequiredForms, setSendingRequiredForms] = useState(false);
 
   const bodyWithVars = body
     .replace(/\{\{Family_Contact_Name\}\}/g, "Family Contact")
@@ -77,6 +88,35 @@ Sincerely,
       console.error(e);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleSendRequiredForms() {
+    const recipient = nextOfKinEmail?.trim();
+    if (!recipient) {
+      toast.error("No customer email on file for this case");
+      return;
+    }
+    setSendingRequiredForms(true);
+    try {
+      const res = await fetch("/api/email/send-required-forms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to send required forms");
+        return;
+      }
+      toast.success("Required forms sent to " + recipient);
+      setRequiredFormsOpen(false);
+      router.refresh();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to send required forms");
+    } finally {
+      setSendingRequiredForms(false);
     }
   }
 
@@ -119,12 +159,52 @@ Sincerely,
                 className="mt-2 font-mono text-sm"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button onClick={handleSend} disabled={sending} className="flex items-center gap-2">
                 <Send className="h-4 w-4" />
                 {sending ? "Sending..." : "Send to client"}
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setRequiredFormsOpen(true)}
+                disabled={sending || !nextOfKinEmail?.trim()}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Send Required Forms
+              </Button>
             </div>
+            <Dialog open={requiredFormsOpen} onOpenChange={setRequiredFormsOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Send Required Forms</DialogTitle>
+                  <DialogDescription>
+                    Email the customer all necessary documents and forms for this case. They will receive links to the
+                    forms. Recipient: <strong>{nextOfKinEmail?.trim() ?? "No email on file"}</strong>
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  <p className="font-medium text-slate-700 mb-2">Documents included:</p>
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    {REQUIRED_FORMS_LIST.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setRequiredFormsOpen(false)}
+                    disabled={sendingRequiredForms}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSendRequiredForms} disabled={sendingRequiredForms}>
+                    {sendingRequiredForms ? "Sending..." : "Send"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
       </div>

@@ -3,7 +3,10 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Stepper, type StepKey } from "@/components/Stepper";
 import { PackageCards } from "@/components/case/PackageCards";
+import { NearbyVenues } from "@/components/case/NearbyVenues";
+import { getLocationQuery, extractLocationQuery } from "@/lib/venues/location-query";
 import { PackagesPageClient } from "./PackagesPageClient";
+import { GeneratePackagesButton } from "./GeneratePackagesButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Sparkles, Send, FileDown } from "lucide-react";
@@ -26,6 +29,7 @@ export default async function PackagesPage({
         orderBy: { createdAt: "desc" },
         take: 1,
       },
+      intakeState: true,
     },
   });
 
@@ -44,6 +48,8 @@ export default async function PackagesPage({
 
   const selectedPackageId = caseRecord.recommendedPackageId ?? caseRecord.packages.find((p) => p.isRecommended)?.id ?? null;
   const selectedPackage = caseRecord.packages.find((p) => p.id === selectedPackageId);
+  const locationQuery = getLocationQuery(caseRecord, caseRecord.intakeState?.collectedJson ?? null);
+  const searchAreaLabel = locationQuery ? extractLocationQuery(locationQuery) || locationQuery : null;
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -59,10 +65,13 @@ export default async function PackagesPage({
         {caseRecord.packages.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-slate-500 mb-4">No packages yet. Generate packages from the Intake step.</p>
-              <Button asChild>
-                <Link href={`/cases/${id}/intake`}>Go to Intake</Link>
-              </Button>
+              <p className="text-slate-500 mb-4">No packages yet. Apply intake to the case from the Intake step, or generate packages now from case data.</p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <GeneratePackagesButton caseId={id} />
+                <Button variant="outline" asChild>
+                  <Link href={`/cases/${id}/intake`}>Go back to Intake</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -83,11 +92,23 @@ export default async function PackagesPage({
               <PackagesPageClient caseId={id} />
             </section>
 
+            <NearbyVenues
+              caseId={id}
+              locationQuery={locationQuery}
+              searchAreaLabel={searchAreaLabel}
+              selectedVenueName={caseRecord.selectedVenueName}
+              selectedVenueAddress={caseRecord.selectedVenueAddress}
+              selectedVenueCategory={caseRecord.selectedVenueCategory}
+              selectedVenueMapsUrl={caseRecord.selectedVenueMapsUrl}
+            />
             <PackageCards
               caseId={id}
               packages={caseRecord.packages}
               selectedPackageId={selectedPackageId}
             />
+            <p className="text-xs text-slate-500 italic max-w-2xl">
+              Prices are estimates. Third-party fees vary by cemetery/crematorium. Final quote requires director confirmation.
+            </p>
           </>
         )}
       </main>
@@ -118,6 +139,15 @@ export default async function PackagesPage({
                 <p className="text-sm font-semibold">{caseRecord.venuePreference ?? "TBD"}</p>
                 <p className="text-xs text-slate-500">{caseRecord.suburb}, {caseRecord.state}</p>
               </div>
+              {caseRecord.selectedVenueName && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Selected venue</p>
+                  <p className="text-sm font-semibold">{caseRecord.selectedVenueName}</p>
+                  {caseRecord.selectedVenueAddress && (
+                    <p className="text-xs text-slate-500">{caseRecord.selectedVenueAddress}</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="p-6 flex-1 bg-slate-50/50">

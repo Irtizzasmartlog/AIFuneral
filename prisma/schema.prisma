@@ -29,7 +29,7 @@ model User {
 
 model Case {
   id                      String    @id @default(cuid())
-  caseNumber              String    @unique
+  caseNumber              String?   @unique // set after create for concurrency-safe unique value
   status                  String    // Draft | Quoted | Sent | Approved | Booked | Completed
   deceasedFullName        String?
   deceasedDob             DateTime?
@@ -50,6 +50,11 @@ model Case {
   budgetPreference        String?  // minimal | balanced | premium
   suburb                  String?
   state                   String?   // AU state
+  locationQuery           String?   // search location: preferred venue, suburb/postcode, or place of death
+  selectedVenueName        String?
+  selectedVenueAddress     String?
+  selectedVenueCategory   String?   // mosque | cemetery | crematorium | chapel | memorial
+  selectedVenueMapsUrl     String?
   preferredServiceDate    DateTime?
   dateFlexibility         String?  // fixed | +/-2 days | flexible
   culturalFaithRequirements String? // JSON array

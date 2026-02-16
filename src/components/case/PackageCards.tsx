@@ -113,17 +113,40 @@ export function PackageCards({
                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
               {isExpanded && (
-                <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                  {pkg.quoteLineItems.map((line, i) => (
-                    <div key={i} className="flex justify-between text-[11px] font-medium">
-                      <span className="text-slate-500">{line.description}</span>
-                      <span>{formatAud(line.amountCents)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-[11px] font-bold border-t border-primary/10 pt-2 mt-1 text-primary">
+                <div className="mt-4 space-y-4">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Professional fees
+                    </p>
+                    {pkg.quoteLineItems
+                      .filter((l) => l.category === "service" || l.category === "merchandise")
+                      .map((line, i) => (
+                        <div key={i} className="flex justify-between text-[11px] font-medium">
+                          <span className="text-slate-600">{line.description}</span>
+                          <span className="shrink-0 ml-2">{formatAud(line.amountCents)}</span>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-2">
+                      Disbursements (third-party)
+                    </p>
+                    {pkg.quoteLineItems
+                      .filter((l) => l.category === "cashAdvance")
+                      .map((line, i) => (
+                        <div key={i} className="flex justify-between text-[11px] font-medium">
+                          <span className="text-slate-600">{line.description}</span>
+                          <span className="shrink-0 ml-2">{formatAud(line.amountCents)}</span>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="flex justify-between text-[11px] font-bold border-t border-primary/10 pt-2 text-primary">
                     <span>Total</span>
                     <span>{formatAud(pkg.totalCents)}</span>
                   </div>
+                  <p className="text-[9px] text-slate-500 italic">
+                    Prices are estimates. Third-party fees vary by cemetery/crematorium. Final quote requires director confirmation.
+                  </p>
                 </div>
               )}
             </CardContent>

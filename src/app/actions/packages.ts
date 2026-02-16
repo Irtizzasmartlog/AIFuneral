@@ -69,3 +69,24 @@ export async function proceedToEmail(caseId: string) {
   revalidatePath(`/cases/${caseId}/email`);
   redirect(`/cases/${caseId}/email`);
 }
+
+export type SelectVenuePayload = {
+  name: string;
+  address: string;
+  category: string;
+  mapsUrl: string;
+};
+
+export async function selectVenue(caseId: string, venue: SelectVenuePayload) {
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      selectedVenueName: venue.name || null,
+      selectedVenueAddress: venue.address || null,
+      selectedVenueCategory: venue.category || null,
+      selectedVenueMapsUrl: venue.mapsUrl || null,
+    },
+  });
+  revalidatePath(`/cases/${caseId}/packages`);
+  revalidatePath(`/cases/${caseId}/intake`);
+}

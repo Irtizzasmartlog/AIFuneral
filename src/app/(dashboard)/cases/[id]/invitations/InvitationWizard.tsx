@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { InvitationPreview } from "./InvitationPreview";
 import { Check, Upload } from "lucide-react";
 
-type Template = { id: string; name: string; slug: string; thumbnailUrl: string | null };
+type Template = { id: string; name: string; slug: string; thumbnailUrl: string | null; designConfig?: string | null };
 type Instance = {
   id: string;
   templateId: string;
@@ -41,7 +41,10 @@ export function InvitationWizard({
   instance: Instance | null;
 }) {
   const [step, setStep] = useState(1);
-  const [selectedTemplateId, setSelectedTemplateId] = useState(instance?.templateId ?? templates[0]?.id ?? "");
+  const [selectedTemplateId, setSelectedTemplateId] = useState(
+    instance?.templateId ?? templates[0]?.id ?? ""
+  );
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? templates[0] ?? null;
   const [serviceName, setServiceName] = useState(instance?.serviceName ?? caseData.deceasedFullName ?? "");
   const [serviceDate, setServiceDate] = useState(
     instance?.serviceDate ? new Date(instance.serviceDate).toISOString().slice(0, 10) : (caseData.preferredServiceDate ? new Date(caseData.preferredServiceDate).toISOString().slice(0, 10) : "")
@@ -78,10 +81,15 @@ export function InvitationWizard({
                 {templates.map((t) => (
                   <Card
                     key={t.id}
-                    className={`cursor-pointer transition-all ${
-                      selectedTemplateId === t.id ? "ring-2 ring-primary border-primary" : ""
+                    role="button"
+                    tabIndex={0}
+                    className={`cursor-pointer transition-all border-2 ${
+                      selectedTemplateId === t.id
+                        ? "ring-2 ring-primary ring-offset-2 border-primary"
+                        : "border-transparent hover:border-slate-200"
                     }`}
                     onClick={() => setSelectedTemplateId(t.id)}
+                    onKeyDown={(e) => e.key === "Enter" && setSelectedTemplateId(t.id)}
                   >
                     <CardContent className="p-4">
                       <div className="aspect-[3/4] bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-sm">
@@ -225,6 +233,7 @@ export function InvitationWizard({
       </div>
       <aside className="hidden xl:block w-[360px] shrink-0">
         <InvitationPreview
+          template={selectedTemplate}
           serviceName={serviceName}
           serviceDate={serviceDate}
           serviceTime={serviceTime}

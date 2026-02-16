@@ -18,6 +18,10 @@ export async function updateCaseFromIntake(caseId: string, data: IntakeFormValue
   const addOns = data.addOns
     ? JSON.stringify(data.addOns)
     : undefined;
+  const locationQuery =
+    data.venuePreference?.trim() ||
+    (data.suburb?.trim() && data.state?.trim() ? `${data.suburb.trim()}, ${data.state.trim()}` : data.suburb?.trim() || null);
+
   await prisma.case.update({
     where: { id: caseId },
     data: {
@@ -40,6 +44,7 @@ export async function updateCaseFromIntake(caseId: string, data: IntakeFormValue
       budgetPreference: data.budgetPreference ?? null,
       suburb: data.suburb || null,
       state: data.state || null,
+      locationQuery: locationQuery ?? undefined,
       preferredServiceDate: parseDate(data.preferredServiceDate) ?? undefined,
       dateFlexibility: data.dateFlexibility ?? null,
       culturalFaithRequirements: data.culturalFaithRequirements || null,
@@ -54,11 +59,16 @@ export async function updateCaseFromIntake(caseId: string, data: IntakeFormValue
   return { success: true };
 }
 
-export async function generatePackages(caseId: string, constraints?: PricingConstraints) {
-  await runOrchestrator(caseId, constraints);
+export async function generatePackagesForCase(caseId: string, constraints?: PricingConstraints) {
+  const result = await runOrchestrator(caseId, constraints);
   revalidatePath(`/cases/${caseId}/packages`);
   revalidatePath(`/cases/${caseId}/intake`);
   revalidatePath("/");
+  return { success: true, count: result.packages.length };
+}
+
+export async function generatePackages(caseId: string, constraints?: PricingConstraints) {
+  await generatePackagesForCase(caseId, constraints);
   redirect(`/cases/${caseId}/packages`);
 }
 
@@ -99,9 +109,21 @@ function casePatchToUpdateData(patch: CasePatch): Record<string, unknown> {
   };
 }
 
+function deriveLocationQuery(patch: CasePatch): string | undefined {
+  const v = patch.venuePreference?.trim();
+  if (v) return v;
+  const s = patch.suburb?.trim();
+  const t = patch.state?.trim();
+  if (s && t) return `${s}, ${t}`;
+  if (s) return s;
+  return undefined;
+}
+
 export async function applyIntakeToCase(caseId: string, parsed: IntakeResultJSON) {
   const patchData = casePatchToUpdateData(parsed.case_patch);
   const updatePayload: Record<string, unknown> = { ...patchData };
+  const locationQuery = deriveLocationQuery(parsed.case_patch);
+  if (locationQuery) updatePayload.locationQuery = locationQuery;
   if (parsed.assumptions?.length || parsed.compliance_checklist?.length) {
     updatePayload.internalNotes = JSON.stringify({
       intakeAssumptions: parsed.assumptions ?? [],
@@ -149,6 +171,7 @@ export async function applyIntakeToCase(caseId: string, parsed: IntakeResultJSON
     }
   });
 
+  await runOrchestrator(caseId);
   revalidatePath(`/cases/${caseId}/intake`);
   revalidatePath(`/cases/${caseId}/packages`);
   revalidatePath("/");

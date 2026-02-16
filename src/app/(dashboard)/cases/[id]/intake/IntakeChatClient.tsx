@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -55,34 +54,48 @@ export function IntakeChatClient({
     if (parsed?.case_patch && Object.keys(parsed.case_patch).length > 0) return parsed.case_patch;
     return initialCaseData ?? {};
   });
+  const [hasApplied, setHasApplied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Default to empty so local uses relative /api/chat/intake
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  const intakeUrl = apiBase ? `${apiBase}/api/chat/intake` : "/api/chat/intake";
+
   const hasFetchedFirst = useRef(false);
   useEffect(() => {
     if (hasFetchedFirst.current || loading || messages.length > 0) return;
     hasFetchedFirst.current = true;
     setLoading(true);
-    fetch("/api/chat/intake", {
+    const payload = { caseId, messages: [] as ChatMessage[] };
+    console.log("[intake] request payload:", payload);
+    fetch(intakeUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ caseId, messages: [] }),
+      body: JSON.stringify(payload),
     })
-      .then((res) => {
-        if (!res.ok) return res.json().then((d) => Promise.reject(new Error(d.error ?? res.statusText)));
-        return res.json();
+      .then(async (res) => {
+        const raw = await res.json().catch(() => ({}));
+        console.log("[intake] response status:", res.status, "| raw response:", raw);
+        if (!res.ok) {
+          setError((raw as { error?: string }).error ?? res.statusText ?? "Failed to load first question");
+          return;
+        }
+        const msg = (raw as { assistantMessage?: string; content?: string }).assistantMessage ?? (raw as { content?: string }).content ?? "";
+        setMessages([{ role: "assistant", content: msg }]);
+        const parsed = (raw as { parsed?: IntakeResultJSON }).parsed ?? null;
+        setLastParsed(parsed);
+        if (parsed?.case_patch) setSnapshotPatch(parsed.case_patch);
       })
-      .then((data: { assistantMessage: string; parsed: IntakeResultJSON }) => {
-        setMessages([{ role: "assistant", content: data.assistantMessage }]);
-        setLastParsed(data.parsed);
-        if (data.parsed?.case_patch) setSnapshotPatch(data.parsed.case_patch);
+      .catch((e) => {
+        console.error("[intake] fetch error:", e);
+        setError("Failed to load first question");
       })
-      .catch(() => setError("Failed to load first question"))
       .finally(() => setLoading(false));
-  }, [caseId, loading, messages.length]);
+  }, [caseId, loading, messages.length, intakeUrl]);
 
   async function sendMessage() {
     const text = input.trim();
@@ -94,21 +107,28 @@ export function IntakeChatClient({
     setMessages(newMessages);
 
     try {
-      const res = await fetch("/api/chat/intake", {
+      const payload = { caseId, messages: newMessages };
+      console.log("[intake] request payload:", payload);
+      const res = await fetch(intakeUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caseId, messages: newMessages }),
+        body: JSON.stringify(payload),
       });
+      const data = await res.json().catch(() => ({}));
+      console.log("[intake] response status:", res.status, "| raw response:", data);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `Request failed: ${res.status}`);
+        const errMsg = (data as { error?: string }).error ?? `Request failed: ${res.status}`;
+        setError(errMsg);
+        toast.error("Failed to get response");
+        return;
       }
-      const data = await res.json();
-      const { assistantMessage, parsed } = data as { assistantMessage: string; parsed: IntakeResultJSON };
-      setMessages((prev) => [...prev, { role: "assistant", content: assistantMessage }]);
+      const msg = (data as { assistantMessage?: string }).assistantMessage ?? (data as { content?: string }).content ?? "";
+      const parsed = (data as { parsed?: IntakeResultJSON }).parsed ?? null;
+      setMessages((prev) => [...prev, { role: "assistant", content: msg }]);
       setLastParsed(parsed);
       if (parsed?.case_patch) setSnapshotPatch(parsed.case_patch);
     } catch (e) {
+      console.error("[intake] send error:", e);
       setError(e instanceof Error ? e.message : "Something went wrong");
       toast.error("Failed to get response");
     } finally {
@@ -116,19 +136,48 @@ export function IntakeChatClient({
     }
   }
 
+  const [applying, setApplying] = useState(false);
+  const [proceedingToPackages, setProceedingToPackages] = useState(false);
+
   async function handleApplyToCase() {
     if (!lastParsed) return;
+    setApplying(true);
     try {
       await applyIntakeToCase(caseId, lastParsed);
-      toast.success("Case updated");
+      setHasApplied(true);
+      toast.success("Case updated and packages generated");
       router.refresh();
     } catch (e) {
       toast.error("Failed to apply");
+    } finally {
+      setApplying(false);
     }
   }
 
   const mode = lastParsed?.mode ?? "COLLECTING";
   const canProceed = mode === "GENERATED";
+  const targetPackagesUrl = `/cases/${caseId}/packages`;
+
+  async function handleProceedToPackages() {
+    console.log("Proceed to packages", caseId, targetPackagesUrl);
+    setProceedingToPackages(true);
+    try {
+      const res = await fetch(`/api/cases/${caseId}/packages/generate`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      console.log("Generate packages response:", res.status, data);
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to generate packages");
+        return;
+      }
+      toast.success(data.count ? `${data.count} packages generated` : "Packages ready");
+      router.push(targetPackagesUrl);
+    } catch (e) {
+      console.error("Proceed to packages failed", e);
+      toast.error("Could not open Packages page");
+    } finally {
+      setProceedingToPackages(false);
+    }
+  }
 
   const completionFields = [
     snapshotPatch.deceasedFullName,
@@ -212,23 +261,29 @@ export function IntakeChatClient({
             </Button>
           </div>
         </div>
-        <div className="flex gap-3 mt-4">
-          <Button variant="outline" onClick={handleApplyToCase} disabled={!lastParsed}>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Apply to Case
-          </Button>
-          {canProceed ? (
-            <Button asChild>
-              <Link href={`/cases/${caseId}/packages`} className="flex items-center gap-2">
-                Proceed to Packages
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+        <div className="flex flex-col gap-2 mt-4">
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={handleApplyToCase}
+              disabled={!lastParsed || applying}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {applying ? "Applying..." : "Apply to Case"}
             </Button>
-          ) : (
-            <Button disabled>
-              Proceed to Packages
-              <ArrowRight className="h-4 w-4 ml-2" />
+            <Button
+              onClick={handleProceedToPackages}
+              disabled={!canProceed || proceedingToPackages}
+              className="flex items-center gap-2"
+            >
+              {proceedingToPackages ? "Generating..." : "Proceed to Packages"}
+              <ArrowRight className="h-4 w-4" />
             </Button>
+          </div>
+          {canProceed && !hasApplied && (
+            <p className="text-sm text-amber-700">
+              Please apply intake to the case before proceeding to Packages.
+            </p>
           )}
         </div>
       </div>

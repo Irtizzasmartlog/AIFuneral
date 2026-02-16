@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DeleteCaseButton } from "@/components/case/DeleteCaseButton";
 import { Plus } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -77,12 +78,15 @@ export default async function DashboardPage() {
                     </TableCell>
                     <TableCell>{c.nextOfKinName ?? "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Link
-                        href={`/cases/${c.id}/intake`}
-                        className="text-primary text-sm font-medium hover:underline"
-                      >
-                        Open
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/cases/${c.id}/intake`}
+                          className="text-primary text-sm font-medium hover:underline"
+                        >
+                          Open
+                        </Link>
+                        <DeleteCaseButton caseId={c.id} caseNumber={c.caseNumber} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

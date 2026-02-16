@@ -430,15 +430,16 @@ export function formatAssistantResponse(assistantText: string, parsed: IntakeRes
   return `${assistantText}\n\n${JSON_DELIMITER}\n${JSON.stringify(parsed)}`;
 }
 
-export function parseAssistantResponse(content: string): { text: string; parsed: IntakeResultJSON | null } {
-  const idx = content.indexOf(JSON_DELIMITER);
-  if (idx === -1) return { text: content.trim(), parsed: null };
-  const text = content.slice(0, idx).trim();
-  const jsonStr = content.slice(idx + JSON_DELIMITER.length).trim();
+export function parseAssistantResponse(content?: string | null): { text: string; parsed: IntakeResultJSON | null } {
+  const safe = typeof content === "string" ? content : "";
+  const idx = safe.indexOf(JSON_DELIMITER);
+  if (idx === -1) return { text: safe.trim(), parsed: null };
+  const text = safe.slice(0, idx).trim();
+  const jsonStr = safe.slice(idx + JSON_DELIMITER.length).trim();
   try {
     const parsed = JSON.parse(jsonStr) as IntakeResultJSON;
     return { text, parsed };
   } catch {
-    return { text, parsed: null };
+    return { text: safe.trim(), parsed: null };
   }
 }
